@@ -1,35 +1,41 @@
 import { FaissStore } from "@langchain/community/vectorstores/faiss";
-import { OpenAIEmbeddings } from "@langchain/openai";
-import { FAISS_DIR } from "./config.js";
+import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/hf_transformers";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { FAISS_DIR } from "./config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Use OpenAI-compatible embeddings; replace with any embeddings provider you like.
-const embeddings = new OpenAIEmbeddings({
-  apiKey: process.env.OPENAI_API_KEY || "dummy",
-  model: "text-embedding-3-small"
-}); // Example setup [web:10].
+const storePath = path.resolve(__dirname, "..", FAISS_DIR);
+const indexFile = path.join(storePath, "faiss.index");
 
-let store;
+const embeddings = new HuggingFaceTransformersEmbeddings({
+  modelName: "Xenova/all-MiniLM-L6-v2"
+});
 
-export async function loadFaissStore() {
+let store = null;
+
+export async function loadFaissStore(docs = null) {
   if (store) return store;
-  const dirPath = path.resolve(__dirname, "..", FAISS_DIR);
-  if (fs.existsSync(dirPath)) {
-    store = await FaissStore.load(dirPath, embeddings); // load persisted index [web:10].
-  } else {
-    store = await FaissStore.fromTexts([], [], embeddings);
-    await store.save(dirPath);
-  }
-  return store;
-}
 
-export async function saveFaissStore() {
-  if (!store) return;
-  const dirPath = path.resolve(__dirname, "..", FAISS_DIR);
-  await store.save(dirPath);
+  // Only load if actual index exists
+  if (fs.existsSync(indexFile)) {
+    store = await FaissStore.load(storePath, embeddings);
+    return store;
+  }
+
+  // If index doesn't exist, build it
+  if (!docs) {
+    throw new Error("FAISS index not found. Run seed_knowledge.js first.");
+  }
+
+  if (!fs.existsSync(storePath)) {
+    fs.mkdirSync(storePath, { recursive: true });
+  }
+
+  store = await FaissStore.fromDocuments(docs, embeddings);
+  await store.save(storePath);
+  return store;
 }

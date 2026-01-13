@@ -1,70 +1,78 @@
 import fetch from "node-fetch";
 import { loadFaissStore } from "./faissStore.js";
-import {
-  PERPLEXITY_API_KEY,
-  PERPLEXITY_MODEL
-} from "./config.js";
+import { checkSafety, buildUnsafeResponse } from "./safety.js";
 
-// Simple helper to call Perplexity API [web:9][web:12].
-async function callPerplexity(systemPrompt, userPrompt) {
-  const resp = await fetch("https://api.perplexity.ai/chat/completions", {
+async function callOllama(prompt) {
+  const res = await fetch("http://localhost:11434/api/generate", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${PERPLEXITY_API_KEY}`,
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: PERPLEXITY_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.2,
-      max_tokens: 512,
-      top_p: 0.95
+      model: "llama3",
+      prompt,
+      stream: false
     })
   });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Perplexity API error: ${resp.status} ${text}`);
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error("Ollama error: " + text);
   }
-  const data = await resp.json();
-  return data.choices[0].message.content;
+
+  const data = await res.json();
+  return data.response;
 }
 
 export async function runRagPipeline(query) {
+  // ---- SAFETY CHECK ----
+  const safety = checkSafety(query);
+
+  // ---- FAISS RETRIEVAL ----
   const store = await loadFaissStore();
-  const k = 4;
-  const docs = await store.similaritySearch(query, k); // FAISS similarity search [web:10].
+  const docs = await store.similaritySearch(query, 4);
 
-  const contextText = docs
-    .map(
-      (d, idx) =>
-        `Source ${idx + 1} (id=${d.metadata?.id || idx + 1}, title=${d.metadata?.title || "NA"}):\n${d.pageContent}`
-    )
-    .join("\n\n");
+  const context = docs.map(d => d.pageContent).join("\n\n");
 
-  const systemPrompt =
-    "You are a cautious yoga assistant. Answer only about yoga, asanas, pranayama, and general wellbeing. " +
-    "Use the provided context, stay within it, and DO NOT give medical diagnosis. " +
-    "If something is unclear or risky, advise consulting a doctor or certified yoga therapist.";
+  // ---- UNSAFE FLOW ----
+  if (safety.isUnsafe) {
+    const safe = buildUnsafeResponse(query);
 
-  const userPrompt =
-    `User question:\n${query}\n\n` +
-    `Context from yoga articles:\n${contextText}\n\n` +
-    "Instructions:\n" +
-    "- Answer in 3–6 short paragraphs or bullet points.\n" +
-    "- Refer to the sources conceptually (e.g., 'one of the beginner pose guides explains…').\n" +
-    "- If user asks for pose prescription with serious conditions, stay general and emphasize safety.\n";
+    const sources = docs.map((d, i) => ({
+      id: i + 1,
+      title: d.metadata?.title || "Yoga Knowledge",
+      snippet: d.pageContent.slice(0, 200)
+    }));
 
-  const answer = await callPerplexity(systemPrompt, userPrompt);
+    return {
+      answer: safe.answer,
+      safetyMessage: safe.safetyMessage,
+      suggestion: safe.suggestion,
+      sources,
+      isUnsafe: true
+    };
+  }
 
-  const sources = docs.map((d, idx) => ({
-    id: d.metadata?.id || `${idx + 1}`,
-    title: d.metadata?.title || `Source ${idx + 1}`,
-    chunkId: d.metadata?.chunkId || `${idx}`,
+  // ---- NORMAL RAG FLOW ----
+  const prompt = `
+You are a yoga assistant.
+Use ONLY the context below to answer.
+Do not give medical diagnosis.
+
+Context:
+${context}
+
+User question:
+${query}
+
+Give a clear, helpful yoga-based answer.
+`;
+
+  const answer = await callOllama(prompt);
+
+  const sources = docs.map((d, i) => ({
+    id: i + 1,
+    title: d.metadata?.title || "Yoga Knowledge",
     snippet: d.pageContent.slice(0, 200)
   }));
 
-  return { answer, sources, rawDocs: docs };
+  return { answer, sources, isUnsafe: false };
 }

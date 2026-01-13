@@ -30,19 +30,20 @@ export function checkSafety(query) {
     flags.push("condition");
   }
 
-  const isUnsafe = flags.length > 0;
-  return { isUnsafe, flags };
+  return { isUnsafe: flags.length > 0, flags };
 }
 
 export function buildUnsafeResponse(userQuery) {
   return {
     answer:
       "Your question touches on an area that can be risky without personalized medical guidance. " +
-      "Instead of intense or inversion poses, focus on gentle supine postures, restorative positions, and simple breathing practices.\n\n" +
-      "Please consult a doctor or certified yoga therapist before attempting any new poses or sequences.",
+      "Instead of intense or inversion poses, consider gentle supine postures, restorative yoga, and slow breathing exercises.\n\n" +
+      "Please consult a doctor or certified yoga therapist before attempting any new poses.",
+
     safetyMessage:
-      "Safety note: Because your query mentions pregnancy or a medical condition, this answer avoids specific posture prescriptions.",
+      "⚠ Safety note: Because your query mentions pregnancy or a medical condition, this response avoids specific pose prescriptions.",
+
     suggestion:
-      "Consider gentle movement like supported savasana, side-lying rest, or diaphragmatic breathing, always under professional supervision."
+      "You may explore gentle practices like supported savasana, side-lying relaxation, or diaphragmatic breathing under professional supervision."
   };
 }
