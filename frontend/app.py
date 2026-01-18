@@ -2,8 +2,8 @@ import streamlit as st
 import requests
 from datetime import datetime
 
-# 🔥 Render backend URL
-BACKEND_URL = "http://localhost:8000/api"
+# Render backend URL
+BACKEND_URL = "https://yoga-app-59be.onrender.com"
 
 st.set_page_config(
     page_title="Yoga Wellness RAG",
@@ -43,7 +43,7 @@ if ask_clicked and query.strip():
             else:
                 data = resp.json()
 
-                # 🚨 Safety warning block
+                #  Safety warning block
                 if data.get("isUnsafe"):
                     st.markdown(
                         "<div style='border-left:4px solid #DC2626; padding:0.6rem 1rem; background:#FEE2E2; border-radius:6px;'>"
@@ -56,7 +56,7 @@ if ask_clicked and query.strip():
                     if data.get("suggestion"):
                         st.info(f"💡 {data.get('suggestion')}")
 
-                # 🧠 AI Answer
+                #  AI Answer
                 st.markdown("### 🧠 AI Answer")
                 st.markdown(
                     f"<div style='animation: fadein 0.4s;'>"
@@ -65,7 +65,7 @@ if ask_clicked and query.strip():
                     unsafe_allow_html=True
                 )
 
-                # 📚 RAG Sources
+                #  RAG Sources
                 st.markdown("### 📚 Sources used")
                 sources = data.get("sources", [])
                 if not sources:
@@ -77,7 +77,7 @@ if ask_clicked and query.strip():
                             f"(id: `{src.get('id')}`)"
                         )
 
-                # 👍👎 Feedback
+                # Feedback
                 st.markdown("---")
                 st.markdown("#### Was this helpful?")
 
