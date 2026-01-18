@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-dotenv.config(); // 👈 must be before anything uses process.env
+dotenv.config();
 
 import express from "express";
 import cors from "cors";
@@ -12,7 +12,18 @@ async function main() {
   await connectDB();
 
   const app = express();
-  app.use(cors());
+
+  app.use(cors({
+    origin: [
+      "https://yogaapp.streamlit.app",
+      "http://localhost:8501"
+    ],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+  }));
+
+  app.options("*", cors());
   app.use(bodyParser.json());
 
   app.get("/health", (req, res) => {
@@ -22,7 +33,7 @@ async function main() {
   app.use("/api", router);
 
   app.listen(PORT, () => {
-    console.log(`Yoga RAG backend listening on http://localhost:${PORT}`);
+    console.log(`Yoga RAG backend listening on port ${PORT}`);
   });
 }
 

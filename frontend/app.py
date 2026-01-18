@@ -34,7 +34,7 @@ if ask_clicked and query.strip():
         try:
             resp = requests.post(
                 f"{BACKEND_URL}/ask",
-                json={"query": query},
+                json={"question": query},
                 timeout=60
             )
 
