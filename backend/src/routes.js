@@ -7,26 +7,29 @@ const router = express.Router();
 
 router.post("/ask", async (req, res) => {
   try {
-    const { query } = req.body;
-    if (!query || !query.trim()) {
+    const { query, question } = req.body;
+    const userQuery = query || question;
+
+    if (!userQuery || !userQuery.trim()) {
       return res.status(400).json({ error: "Query is required" });
     }
 
-    const safety = checkSafety(query);
+    const safety = checkSafety(userQuery);
     const { QueryModel } = getCollections();
 
     let result;
+
     if (safety.isUnsafe) {
       result = {
-        ...buildUnsafeResponse(query),
+        ...buildUnsafeResponse(userQuery),
         sources: []
       };
     } else {
-      result = await runRagPipeline(query);
+      result = await runRagPipeline(userQuery);
     }
 
     await QueryModel.create({
-      query,
+      query: userQuery,
       answer: result.answer,
       sources: result.sources,
       isUnsafe: safety.isUnsafe,
@@ -42,8 +45,11 @@ router.post("/ask", async (req, res) => {
       sources: result.sources
     });
   } catch (err) {
-    console.error("Ask error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("ASK ROUTE ERROR:", err.message);
+    res.status(500).json({
+      error: "Failed to process query",
+      details: err.message
+    });
   }
 });
 
@@ -60,8 +66,8 @@ router.post("/feedback", async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("Feedback error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("FEEDBACK ERROR:", err.message);
+    res.status(500).json({ error: "Failed to save feedback" });
   }
 });
 

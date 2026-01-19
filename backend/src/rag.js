@@ -2,29 +2,35 @@ import { loadFaissStore } from "./faissStore.js";
 import { checkSafety, buildUnsafeResponse } from "./safety.js";
 import Groq from "groq-sdk";
 
+if (!process.env.GROQ_API_KEY) {
+  throw new Error("GROQ_API_KEY is missing");
+}
+
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
 
 export async function runRagPipeline(query) {
-
   const safety = checkSafety(query);
 
- 
-  const store = await loadFaissStore();
-  const docs = await store.similaritySearch(query, 4);
+  let docs = [];
+  let sources = [];
 
-  
-  const sources = docs.map((d, i) => ({
-    id: i + 1,
-    title: d.metadata?.title || "Yoga Knowledge",
-    snippet: d.pageContent.slice(0, 200)
-  }));
+  try {
+    const store = await loadFaissStore();
+    docs = await store.similaritySearch(query, 4);
 
+    sources = docs.map((d, i) => ({
+      id: i + 1,
+      title: d.metadata?.title || "Yoga Knowledge",
+      snippet: d.pageContent.slice(0, 200)
+    }));
+  } catch (err) {
+    console.warn("FAISS unavailable, continuing without retrieval");
+  }
 
   if (safety.isUnsafe) {
     const safe = buildUnsafeResponse(query);
-
     return {
       answer: safe.answer,
       safetyMessage: safe.safetyMessage,
@@ -35,8 +41,9 @@ export async function runRagPipeline(query) {
     };
   }
 
- 
-  const context = docs.map(d => d.pageContent).join("\n\n");
+  const context = docs.length
+    ? docs.map(d => d.pageContent).join("\n\n")
+    : "General yoga and wellness knowledge.";
 
   const prompt = `
 You are a certified yoga and wellness assistant.
@@ -52,7 +59,6 @@ Question:
 ${query}
 `;
 
-  //  LLaMA generation (Groq)
   const completion = await groq.chat.completions.create({
     model: "llama3-70b-8192",
     temperature: 0.4,
@@ -64,7 +70,6 @@ ${query}
 
   const answer = completion.choices[0].message.content;
 
-  //  Final RAG response
   return {
     answer,
     sources,
